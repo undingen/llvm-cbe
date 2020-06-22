@@ -24,6 +24,19 @@
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/TargetRegistry.h"
 
+#include "llvm/IR/Intrinsics.h"
+#include "llvm/IR/IntrinsicsAArch64.h"
+#include "llvm/IR/IntrinsicsAMDGPU.h"
+#include "llvm/IR/IntrinsicsARM.h"
+#include "llvm/IR/IntrinsicsBPF.h"
+#include "llvm/IR/IntrinsicsHexagon.h"
+#include "llvm/IR/IntrinsicsNVPTX.h"
+#include "llvm/IR/IntrinsicsPowerPC.h"
+#include "llvm/IR/IntrinsicsR600.h"
+#include "llvm/IR/IntrinsicsS390.h"
+#include "llvm/IR/IntrinsicsWebAssembly.h"
+#include "llvm/IR/IntrinsicsX86.h"
+
 #include "TopologicalSorter.h"
 
 #include <algorithm>
@@ -247,6 +260,8 @@ raw_ostream &CWriter::printTypeString(raw_ostream &Out, Type *Ty,
   }
 
   default:
+   // HACK:
+    return Out;
 #ifndef NDEBUG
     errs() << "Unknown primitive type: " << *Ty << "\n";
 #endif
@@ -542,6 +557,10 @@ raw_ostream &CWriter::printStructDeclaration(raw_ostream &Out,
        I != E; ++I, Idx++) {
     Out << "  ";
     bool empty = isEmptyType(*I);
+    if (empty) {
+       Out << "char field" << utostr(Idx) << "[0];\n";
+       continue;
+    }
     if (empty)
       Out << "/* "; // skip zero-sized types
     printTypeName(Out, *I, false) << " field" << utostr(Idx);
@@ -1496,7 +1515,7 @@ void CWriter::printConstantWithCast(Constant *CPV, unsigned Opcode) {
   // Extract the operand's type, we'll need it.
   Type *OpTy = CPV->getType();
   // TODO: VectorType are valid here, but not supported
-  if (!OpTy->isIntegerTy() && !OpTy->isFloatingPointTy()) {
+  if (!OpTy->isIntegerTy() && !OpTy->isPointerTy() && !OpTy->isFloatingPointTy()) {
 #ifndef NDEBUG
     errs() << "Unsupported 'constant with cast' type " << *OpTy
            << " in: " << *CPV << "\n"
@@ -2165,7 +2184,7 @@ bool CWriter::doInitialization(Module &M) {
 
   TD = new DataLayout(&M);
   IL = new IntrinsicLowering(*TD);
-  IL->AddPrototypes(M);
+  //IL->AddPrototypes(M);
 
 #if 0
   std::string Triple = TheModule->getTargetTriple();
@@ -3313,6 +3332,16 @@ void CWriter::printModuleTypes(raw_ostream &Out) {
   // Keep track of which types have been printed so far.
   std::set<Type *> TypesPrinted;
 
+  // HACK we need to visit type defs first to see what funcptr we need to declare
+  Out << "#if 0\n";
+  auto before = TypesPrinted;
+  for (auto it = TypedefDeclTypes.begin(), end = TypedefDeclTypes.end();
+       it != end; ++it) {
+    printContainedTypes(Out, *it, TypesPrinted);
+  }
+  TypesPrinted = before;
+  Out << "#endif\n";
+
   // Loop over all structures then push them into the stack so they are
   // printed in the correct order.
   Out << "\n/* Types Declarations */\n";
@@ -3337,6 +3366,7 @@ void CWriter::printModuleTypes(raw_ostream &Out) {
 
   std::vector<FunctionDefinition> FunctionTypeDefinitions;
   // Copy Function Types into indexable container
+  for (int hack=0; hack<2; ++hack)
   for (auto &I : UnnamedFunctionIDs) {
     const auto &F = I.first;
     FunctionType *FT = F.first;
@@ -3393,6 +3423,8 @@ void CWriter::printModuleTypes(raw_ostream &Out) {
        it != end; ++it) {
     printContainedTypes(Out, *it, TypesPrinted);
   }
+
+
 }
 
 void CWriter::forwardDeclareStructs(raw_ostream &Out, Type *Ty,
@@ -3777,6 +3809,18 @@ void CWriter::visitPHINode(PHINode &I) {
 
   writeOperand(&I);
   Out << "__PHI_TEMPORARY";
+}
+
+void CWriter::visitUnaryOperator(UnaryOperator &I) {
+  switch (I.getOpcode()) {
+    default:
+      llvm_unreachable("Don't know how to handle this unary operator");
+      break;
+    case Instruction::FNeg:
+      Out << "-(";
+      writeOperand(I.getOperand(0), ContextCasted);
+      Out << ")"; break;
+  }
 }
 
 void CWriter::visitBinaryOperator(BinaryOperator &I) {
@@ -4412,10 +4456,10 @@ bool CWriter::lowerIntrinsics(Function &F) {
           case Intrinsic::vaend:
           case Intrinsic::returnaddress:
           case Intrinsic::frameaddress:
-          case Intrinsic::setjmp:
-          case Intrinsic::longjmp:
-          case Intrinsic::sigsetjmp:
-          case Intrinsic::siglongjmp:
+          //case Intrinsic::setjmp:
+          //case Intrinsic::longjmp:
+          //case Intrinsic::sigsetjmp:
+          //case Intrinsic::siglongjmp:
           case Intrinsic::prefetch:
           case Intrinsic::x86_sse_cmp_ss:
           case Intrinsic::x86_sse_cmp_ps:
@@ -4657,6 +4701,7 @@ bool CWriter::visitBuiltinCall(CallInst &I, Intrinsic::ID ID) {
     writeOperand(I.getArgOperand(0), ContextCasted);
     Out << ')';
     return true;
+#if 0
   case Intrinsic::setjmp:
     Out << "setjmp(*(jmp_buf*)";
     writeOperand(I.getArgOperand(0), ContextCasted);
@@ -4683,6 +4728,7 @@ bool CWriter::visitBuiltinCall(CallInst &I, Intrinsic::ID ID) {
     writeOperand(I.getArgOperand(1), ContextCasted);
     Out << ')';
     return true;
+#endif
   case Intrinsic::prefetch:
     Out << "LLVM_PREFETCH((const void *)";
     writeOperand(I.getArgOperand(0), ContextCasted);

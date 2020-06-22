@@ -24,6 +24,7 @@
 #include "llvm/CodeGen/LinkAllAsmWriterComponents.h"
 #include "llvm/CodeGen/LinkAllCodegenComponents.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
+#include "llvm/InitializePasses.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/LLVMContext.h"
@@ -109,7 +110,7 @@ static ToolOutputFile *GetOutputStream(const char *TargetName,
       OutputFilename = GetFileNameRoot(InputFilename);
 
       switch (FileType) {
-      case TargetMachine::CGFT_AssemblyFile:
+      case CodeGenFileType::CGFT_AssemblyFile:
         if (TargetName[0] == 'c') {
           if (TargetName[1] == 0)
             OutputFilename += ".cbe.c";
@@ -120,13 +121,13 @@ static ToolOutputFile *GetOutputStream(const char *TargetName,
         } else
           OutputFilename += ".s";
         break;
-      case TargetMachine::CGFT_ObjectFile:
+      case CodeGenFileType::CGFT_ObjectFile:
         if (OS == Triple::Win32)
           OutputFilename += ".obj";
         else
           OutputFilename += ".o";
         break;
-      case TargetMachine::CGFT_Null:
+      case CodeGenFileType::CGFT_Null:
         OutputFilename += ".null";
         break;
       }
@@ -136,10 +137,10 @@ static ToolOutputFile *GetOutputStream(const char *TargetName,
   // Decide if we need "binary" output.
   bool Binary = false;
   switch (FileType) {
-  case TargetMachine::CGFT_AssemblyFile:
+  case CodeGenFileType::CGFT_AssemblyFile:
     break;
-  case TargetMachine::CGFT_ObjectFile:
-  case TargetMachine::CGFT_Null:
+  case CodeGenFileType::CGFT_ObjectFile:
+  case CodeGenFileType::CGFT_Null:
     Binary = true;
     break;
   }
@@ -328,7 +329,7 @@ static int compileModule(char **argv, LLVMContext &Context) {
   PM.add(createTargetTransformInfoWrapperPass(Target.getTargetIRAnalysis()));
 
   if (RelaxAll) {
-    if (FileType != TargetMachine::CGFT_ObjectFile)
+    if (FileType != CodeGenFileType::CGFT_ObjectFile)
       errs() << argv[0]
              << ": warning: ignoring -mc-relax-all because filetype != obj\n";
   }

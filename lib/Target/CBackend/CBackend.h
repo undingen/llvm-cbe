@@ -280,6 +280,8 @@ private:
   }
   void visitUnreachableInst(UnreachableInst &I);
 
+  void visitUnaryOperator(UnaryOperator &I);
+
   void visitPHINode(PHINode &I);
   void visitBinaryOperator(BinaryOperator &I);
   void visitICmpInst(ICmpInst &I);

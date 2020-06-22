@@ -33,8 +33,8 @@ public:
   CTargetSubtargetInfo(const TargetMachine &TM, const Triple &TT, StringRef CPU,
                        StringRef FS)
       : TargetSubtargetInfo(TT, CPU, FS, ArrayRef<SubtargetFeatureKV>(),
-                            ArrayRef<SubtargetFeatureKV>(), nullptr, nullptr,
-                            nullptr, nullptr, nullptr, nullptr, nullptr),
+                            ArrayRef<SubtargetSubTypeKV>(), nullptr, nullptr,
+                            nullptr, nullptr, nullptr, nullptr),
         Lowering(TM) {}
   bool enableAtomicExpand() const override;
   const TargetLowering *getTargetLowering() const override;
@@ -59,7 +59,7 @@ public:
                            raw_pwrite_stream *DwoOut,
 #endif
                            CodeGenFileType FileType, bool DisableVerify = true,
-                           MachineModuleInfo *MMI = nullptr) override;
+                           MachineModuleInfoWrapperPass *MMI = nullptr) override;
 
   // TargetMachine interface
   const TargetSubtargetInfo *getSubtargetImpl(const Function &) const override;
